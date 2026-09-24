@@ -2,7 +2,7 @@
 Mirrors the 5 most recently active Claude Code sessions into Start Menu\Programs\Claude Sessions.
 Each shortcut opens Windows Terminal in the session's working directory and runs `claude --resume <id>`.
 #>
-param([int]$Count = 5, [string]$Exclude = '^Tuxedo')
+param([int]$Count = 5, [string]$Exclude = '-temp$')
 
 $projects = Join-Path $env:USERPROFILE '.claude\projects'
 $menuDir  = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Claude Sessions'

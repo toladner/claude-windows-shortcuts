@@ -1,13 +1,14 @@
-﻿# Tray icon for the "Tuxedo-general" background Claude session.
+﻿# Tray icon for the temporary background Claude session started by start-temp-session.ps1.
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
-$name = 'Tuxedo-general'
+# Must match the name in start-temp-session.ps1.
+$name = if ($env:CLAUDE_TEMP_SESSION) { $env:CLAUDE_TEMP_SESSION } else { "$($env:COMPUTERNAME.ToLower())-temp" }
 $claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
 $desktop = Join-Path $env:USERPROFILE 'Desktop'
 $scriptDir = $PSScriptRoot
 
 # Single instance, so repeated logons or manual runs don't stack icons.
-$mutex = New-Object System.Threading.Mutex($false, 'Local\TuxedoGeneralTray')
+$mutex = New-Object System.Threading.Mutex($false, 'Local\ClaudeTempSessionTray')
 if (-not $mutex.WaitOne(0)) { exit 0 }
 
 function Get-Session {
@@ -22,7 +23,7 @@ function Get-RemoteUrl($session) {
 }
 
 $tray = New-Object System.Windows.Forms.NotifyIcon
-$tray.Icon = New-Object System.Drawing.Icon (Join-Path $PSScriptRoot 'tuxedo-tray.ico'), 32, 32
+$tray.Icon = New-Object System.Drawing.Icon (Join-Path $PSScriptRoot 'temp-session-tray.ico'), 32, 32
 $tray.Text = $name
 $tray.Visible = $true
 
@@ -33,7 +34,7 @@ $openWeb = {
     else { $tray.ShowBalloonTip(3000, $name, 'Session not running or no Remote Control URL yet.', 'Warning') }
 }
 
-Add-Type -Namespace Tuxedo -Name Win32 -MemberDefinition @'
+Add-Type -Namespace TempSession -Name Win32 -MemberDefinition @'
 public delegate bool EnumProc(System.IntPtr h, System.IntPtr p);
 [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, System.IntPtr p);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(System.IntPtr h, System.Text.StringBuilder s, int n);
@@ -45,23 +46,23 @@ public delegate bool EnumProc(System.IntPtr h, System.IntPtr p);
 public struct RECT { public int Left, Top, Right, Bottom; }
 '@
 # Physical pixels, so screen and window coordinates agree under display scaling.
-[Tuxedo.Win32]::SetProcessDPIAware() | Out-Null
+[TempSession.Win32]::SetProcessDPIAware() | Out-Null
 
 function Get-TerminalWindows {
     $found = New-Object System.Collections.Generic.List[IntPtr]
-    $cb = [Tuxedo.Win32+EnumProc] {
+    $cb = [TempSession.Win32+EnumProc] {
         param($h, $p)
         $sb = New-Object System.Text.StringBuilder 64
-        [Tuxedo.Win32]::GetClassName($h, $sb, 64) | Out-Null
-        if ($sb.ToString() -eq 'CASCADIA_HOSTING_WINDOW_CLASS' -and [Tuxedo.Win32]::IsWindowVisible($h)) { $found.Add($h) }
+        [TempSession.Win32]::GetClassName($h, $sb, 64) | Out-Null
+        if ($sb.ToString() -eq 'CASCADIA_HOSTING_WINDOW_CLASS' -and [TempSession.Win32]::IsWindowVisible($h)) { $found.Add($h) }
         $true
     }
-    [Tuxedo.Win32]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+    [TempSession.Win32]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
     , $found
 }
 
 # Pixel size of the terminal window and the offset between wt.exe --pos and where the window lands, learned from the last launch.
-$geometryFile = Join-Path $PSScriptRoot 'tuxedo-tray-geometry.json'
+$geometryFile = Join-Path $PSScriptRoot 'temp-session-tray-geometry.json'
 $script:geometry = try { Get-Content $geometryFile -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null }
 if (-not ($script:geometry.w -gt 0 -and $script:geometry.h -gt 0)) { $script:geometry = [pscustomobject]@{ w = 1039; h = 673; dx = -8; dy = 0 } }
 
@@ -102,8 +103,8 @@ $poll.add_Tick({
     $new = (Get-TerminalWindows) | Where-Object { $script:before -notcontains $_ } | Select-Object -First 1
     if (-not $new) { return }
 
-    $r = New-Object Tuxedo.Win32+RECT
-    [Tuxedo.Win32]::GetWindowRect($new, [ref]$r) | Out-Null
+    $r = New-Object TempSession.Win32+RECT
+    [TempSession.Win32]::GetWindowRect($new, [ref]$r) | Out-Null
     $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
     $area = $script:area
     # The window is created off-screen and only then moved to --pos; wait for that.
@@ -112,14 +113,14 @@ $poll.add_Tick({
     # Only correct (and remember) when the guess was off, e.g. on first launch or after a display scaling change.
     if ($r.Left -ne $x -or $r.Top -ne $y) {
         # SWP_NOZORDER | SWP_NOACTIVATE
-        [Tuxedo.Win32]::SetWindowPos($new, [IntPtr]::Zero, $x, $y, [Math]::Min($w, $area.Width), [Math]::Min($h, $area.Height), 0x14) | Out-Null
+        [TempSession.Win32]::SetWindowPos($new, [IntPtr]::Zero, $x, $y, [Math]::Min($w, $area.Width), [Math]::Min($h, $area.Height), 0x14) | Out-Null
         $dx = $r.Left - $script:posX; $dy = $r.Top - $script:posY
         # A large offset means wt.exe clamped the position rather than applying it, so keep the known offset.
         if ([Math]::Abs($dx) -gt 50 -or [Math]::Abs($dy) -gt 50) { $dx = $script:geometry.dx; $dy = $script:geometry.dy }
         $script:geometry = [pscustomobject]@{ w = $w; h = $h; dx = $dx; dy = $dy }
         $script:geometry | ConvertTo-Json | Set-Content $geometryFile
     }
-    [Tuxedo.Win32]::SetForegroundWindow($new) | Out-Null
+    [TempSession.Win32]::SetForegroundWindow($new) | Out-Null
     Hide-Splash
 })
 
@@ -154,7 +155,7 @@ $menu.Items.Add('Open in terminal', $null, $openTerminal) | Out-Null
 $menu.Items.Add('Restart session', $null, {
     $s = Get-Session
     if ($s) { & $claude stop $s.id 2>&1 | Out-Null }
-    Start-Process conhost.exe -ArgumentList "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptDir\start-tuxedo-general.ps1`""
+    Start-Process conhost.exe -ArgumentList "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptDir\start-temp-session.ps1`""
 }) | Out-Null
 $menu.Items.Add('-') | Out-Null
 $menu.Items.Add('Hide icon', $null, { $tray.Visible = $false; [System.Windows.Forms.Application]::Exit() }) | Out-Null

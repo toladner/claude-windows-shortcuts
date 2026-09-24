@@ -1,4 +1,4 @@
-# Registers logon tasks for the Tuxedo-general session + tray icon and the Start Menu session shortcuts.
+# Registers logon tasks for the temp session + tray icon and the Start Menu session shortcuts.
 $dir = $PSScriptRoot
 $user = "$env:USERDOMAIN\$env:USERNAME"
 
@@ -9,9 +9,9 @@ function New-HiddenAction($file, $extra = '') {
 
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
 
-Register-ScheduledTask -TaskName 'Claude Tuxedo-general' -Force -Settings $settings `
+Register-ScheduledTask -TaskName 'Claude Temp Session' -Force -Settings $settings `
     -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) `
-    -Action (New-HiddenAction 'start-tuxedo-general.ps1'), (New-HiddenAction 'tuxedo-tray.ps1' '-STA') | Out-Null
+    -Action (New-HiddenAction 'start-temp-session.ps1'), (New-HiddenAction 'temp-session-tray.ps1' '-STA') | Out-Null
 
 $menuTrigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 # Refresh periodically so the shortcuts follow recently used sessions.
@@ -19,4 +19,4 @@ $menuTrigger.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) -Repeti
 Register-ScheduledTask -TaskName 'Claude Start Menu Sessions' -Force -Settings $settings `
     -Trigger $menuTrigger -Action (New-HiddenAction 'claude-start-menu.ps1') | Out-Null
 
-'Installed. Start now with: Start-ScheduledTask "Claude Tuxedo-general"; Start-ScheduledTask "Claude Start Menu Sessions"'
+'Installed. Start now with: Start-ScheduledTask "Claude Temp Session"; Start-ScheduledTask "Claude Start Menu Sessions"'

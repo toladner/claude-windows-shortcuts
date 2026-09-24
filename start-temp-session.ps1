@@ -1,10 +1,11 @@
-# Ensures a temporary background Claude session "Tuxedo-general" with Remote Control is running in the Desktop folder.
-# Each start discards previous Tuxedo-general sessions and their transcripts, so nothing is kept long term.
-$name = 'Tuxedo-general'
+# Ensures a temporary background Claude session "<computer-name>-temp" with Remote Control is running in the Desktop folder.
+# Each start discards previous sessions of that name and their transcripts, so nothing is kept long term.
+# Set CLAUDE_TEMP_SESSION to use a different session name.
+$name = if ($env:CLAUDE_TEMP_SESSION) { $env:CLAUDE_TEMP_SESSION } else { "$($env:COMPUTERNAME.ToLower())-temp" }
 $cwd = Join-Path $env:USERPROFILE 'Desktop'
 $claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
 $claudeHome = Join-Path $env:USERPROFILE '.claude'
-$log = Join-Path $PSScriptRoot 'start-tuxedo-general.log'
+$log = Join-Path $PSScriptRoot 'start-temp-session.log'
 
 Set-Location $cwd
 # Give networking and login a moment to settle after boot.
