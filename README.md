@@ -2,7 +2,7 @@
 
 Windows helpers for [Claude Code](https://claude.com/claude-code).
 
-- **Temp session tray icon**: `start-temp-session.ps1` keeps a disposable background session called `<computer-name>-temp` running, with Remote Control on, in `~\Desktop`. Set `CLAUDE_TEMP_SESSION` to pick another name. Each fresh start deletes the previous one and its transcript. `temp-session-tray.ps1` adds a taskbar tray icon:
+- **Temp session tray icon**: `start-temp-session.ps1` keeps a disposable background session called `<computer-name>-temp` running, with Remote Control on, in `~\Desktop`. Set `CLAUDE_TEMP_SESSION` to pick another name. Each fresh start deletes the previous one and its transcript, and archives leftover sessions of that name in the claude.ai Remote Control list. `temp-session-tray.ps1` adds a taskbar tray icon:
   - left-click opens the session in Windows Terminal, docked to the bottom-right corner
   - right-click offers *Open in browser* (Remote Control URL), *Restart session* and *Hide icon*
 - **Start Menu sessions**: `claude-start-menu.ps1` puts shortcuts to the 5 most recently active sessions in *Start → Claude Sessions*, skipping `*-temp` sessions. Each one runs `claude --resume <id>` in that session's folder.

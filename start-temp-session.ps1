@@ -35,5 +35,34 @@ foreach ($s in $sessions) {
     "$(Get-Date -Format s) discarded $sid" | Add-Content $log
 }
 
+# A bridge only archives its claude.ai session on a clean exit, so sessions killed by shutdown linger in the
+# Remote Control list. None is running locally now, so every remote one with this name is stale.
+try {
+    $token = (Get-Content (Join-Path $claudeHome '.credentials.json') -Raw | ConvertFrom-Json).claudeAiOauth.accessToken
+    # Regex, not ConvertFrom-Json: .claude.json has project keys differing only in case, which it rejects.
+    $org = [regex]::Match((Get-Content (Join-Path $env:USERPROFILE '.claude.json') -Raw), '"organizationUuid"\s*:\s*"([0-9a-f-]+)"').Groups[1].Value
+    $headers = @{
+        'Authorization'      = "Bearer $token"
+        'anthropic-version'  = '2023-06-01'
+        'anthropic-beta'     = 'ccr-byoc-2025-07-29'
+        'x-organization-uuid' = $org
+    }
+    $api = 'https://api.anthropic.com/v1/sessions'
+    $stale = @()
+    $after = $null
+    do {
+        $url = $api + $(if ($after) { "?after_id=$after" } else { '' })
+        $page = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 30
+        $stale += @($page.data | Where-Object { $_.title -eq $name -and $_.environment_kind -eq 'bridge' -and $_.session_status -ne 'archived' -and $_.connection_status -ne 'connected' })
+        $after = $page.last_id
+    } while ($page.has_more -and $after)
+    foreach ($r in $stale) {
+        Invoke-RestMethod -Uri "$api/$($r.id)/archive" -Headers $headers -Method Post -Body '{}' -ContentType 'application/json' -TimeoutSec 30 | Out-Null
+        "$(Get-Date -Format s) archived remote $($r.id)" | Add-Content $log
+    }
+} catch {
+    "$(Get-Date -Format s) remote cleanup failed: $($_.Exception.Message)" | Add-Content $log
+}
+
 $out = & $claude --bg --name $name --remote-control $name --model opus 2>&1
 "$(Get-Date -Format s) started new: $out" | Add-Content $log
